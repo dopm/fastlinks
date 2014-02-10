@@ -6,14 +6,15 @@
   "keywords": [],
   "dependencies": {
     "component/emitter": "*",
+    "component/delegate": "*",
     "component/url": "*",
-    "yuehu/dom-parser": "*"
+    "yuehu/dom-parser": "*",
+    "yuehu/execute-script": "*"
   },
   "development": {},
   "license": "MIT",
   "main": "index.js",
   "scripts": [
     "index.js"
-  ],
-  "remotes": []
+  ]
 }
