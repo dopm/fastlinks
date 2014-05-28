@@ -1,61 +1,65 @@
+/**
+ * Turbolinks in component.
+ */
 
 var delegate = require('delegate');
 var domparse = require('dom-parser');
 var execute = require('execute-script');
-var urllib = require('url');
+var Emitter = require('emitter');
 
-var isSupported = history && history.pushState && history.replaceState;
+exports = module.exports = new Emitter();
 
-function Turbolinks() {
-  this.cacheSize = 10;
-  this.pageCache = {};
-  this.state = null;
-  this.referrer = null;
-  this.transitionCache = false;
 
-  if (isSupported) {
-    history.replaceState({turbolinks: true, url: location.href}, '', location.href);
-    this.state = history.state;
-  }
-}
+var hasHistoryState = history && history.pushState && history.replaceState && (history.state !== undefined || navigator.userAgent.match(/Firefox\/2[6|7]/));
+var buggyBrowsers = navigator.userAgent.match(/CriOS\//);
 
-// event emitter support
-require('emitter')(Turbolinks.prototype);
+// TODO: cookie
+var isSupported = hasHistoryState && !buggyBrowsers;
 
-Turbolinks.prototype.visit = function(url) {
+var currentState, referrer;
+
+function visit(url) {
   if (!isSupported) return location.href = url;
 
-  var me = this;
   // remember referer
-  me.referrer = location.href;
+  referrer = location.href;
 
-  // cache current page
+  // TODO: cache current page
 
   // reflect new url
-  if (url !== me.referrer) {
+  if (url !== referrer) {
     history.pushState({turbolinks: true, url: url}, '', url);
   }
 
-  if (me.transitionCache) {
-    var cached = me.pageCache[url];
-    if (cached) return me.fetch(url);
-  }
+  // TODO: transition cache
 
-  me.fetch(url, function() {
+  fetch(url, function() {
     if (location.hash) {
       return location.href = location.href;
     } else {
       window.scrollTo(0, 0);
     }
   });
-};
+}
 
-Turbolinks.prototype.fetch = function(url, cb) {
-  var me = this;
-  me.emit('page:fetch', {url: url});
-  me.request(url, function(xhr) {
-    var ct = xhr.getResponseHeader('Content-Type');
+
+/**
+ * Fetch and render the data.
+ */
+function fetch(url, cb) {
+  exports.emit('page:fetch', {url: url});
+
+  if (fetch.xhr) {
+    fetch.xhr.abort();
+  }
+
+  // remove hash for IE10 compatibility
+  var safeURL = removeHash(url);
+
+  fetch.xhr = request(safeURL, function(xhr) {
+    exports.emit('page:receive');
     var doc;
+    var ct = xhr.getResponseHeader('Content-Type');
     if (validContentType(ct) && validStatus(xhr.status)) {
       doc = domparse(xhr.responseText);
     }
@@ -63,58 +67,66 @@ Turbolinks.prototype.fetch = function(url, cb) {
       return location.href = url;
     }
 
-    var data = extractTitleAndBody(doc);
-    data.runscript = true;
-    me.render(data);
+    render(doc, true);
 
     // reflect redirected url
     var loc = xhr.getResponseHeader('X-XHR-Redirected-To');
     if (loc) {
-      // TODO: hash
-      history.replaceState(me.state, '', loc);
+      var preservedHash = removeHash(loc) === loc ? document.hash : '';
+      history.replaceState(currentState, '', loc + preservedHash);
     }
 
     cb && cb();
+    exports.emit('page:load');
   });
-};
+
+  fetch.xhr.onloadend = function() {
+    fetch.xhr = null;
+  };
+}
 
 /**
  * Render data to document.
  */
-Turbolinks.prototype.render = function(data) {
-  if (data.title) {
+function render(doc, runscript) {
+  var node = doc.querySelector('title');
+  var title = node ? node.textContent : null;
+  // update title
+  if (title) {
     document.title = data.title;
   }
-  document.documentElement.replaceChild(data.body, document.body);
 
-  if (data.head) {
-    updateHead(data.head);
-  }
+  var body = doc.body;
+  // remove <noscript>
+  body.innerHTML = body.innerHTML.replace(/<noscript[\S\s]*?<\/noscript>/ig, '');
 
-  if (data.runscript) {
+  // update body
+  document.documentElement.replaceChild(body, document.body);
+
+  // update head
+  updateHead(doc.head);
+
+  if (runscript) {
     executeScripts(document.body);
   }
 
-  this.state = history.state;
-  this.emit('page:change');
-  this.emit('page:update');
-};
+  currentState = history.state;
+  exports.emit('page:change');
+  exports.emit('page:update');
+}
+
 
 /**
- * Send xhr request.
+ * Send a GET request.
  */
-Turbolinks.prototype.request = function(url, cb) {
-  var me = this;
-
+function request(url, cb) {
   var xhr = new XMLHttpRequest();
 
-  // TODO: remove hash
   xhr.open('GET', url, true);
   xhr.setRequestHeader('Accept', 'text/html, application/xhtml+xml, application/xml');
-  xhr.setRequestHeader('X-XHR-Referer', me.referrer);
+  xhr.setRequestHeader('X-XHR-Referer', referrer);
 
   xhr.onload = function() {
-    me.emit('page:receive');
     cb && cb(xhr);
   };
 
@@ -126,25 +138,44 @@ Turbolinks.prototype.request = function(url, cb) {
   if (xhr.upload) {
     xhr.upload.onprogress = function(e){
       e.percent = e.loaded / e.total * 100;
-      me.emit('progress', e);
+      exports.emit('progress', e);
     };
   }
 
   xhr.send();
-
   return xhr;
-};
+}
 
 
+/**
+ * Remove hash on a URL.
+ */
+function removeHash(url) {
+  var link = url;
+  if (!url.href) {
+    link = document.createElement('A');
+    link.href = url;
+  }
+  return url.href.replace(url.hash, '');
+}
+
+
+/**
+ * Validate content type of a response.
+ */
 function validContentType(ct) {
   return ct.match(/^(?:text\/html|application\/xhtml\+xml|application\/xml)(?:;|$)/);
 }
+
+/**
+ * Validate response status code.
+ */
 function validStatus(code) {
   return code < 400;
 }
 
-function executeScripts(body) {
-  var scripts = body.querySelectorAll('script:not([data-turbolinks-eval="false"])');
+function executeScripts(doc) {
+  var scripts = doc.querySelectorAll('script:not([data-turbolinks-eval="false"])');
   for (var i = 0; i < scripts.length; i++) {
     execute(scripts[i]);
   }
@@ -162,29 +193,48 @@ function updateHead(head) {
   }
 }
 
-function extractTitleAndBody(doc) {
-  var ret = {};
-
-  var title = doc.querySelector('title');
-  ret.title = title ? title.textContent: null;
-
-  var body = doc.body;
-  // remove <noscript>
-  body.innerHTML = body.innerHTML.replace(/<noscript[\S\s]*?<\/noscript>/ig, '');
-  ret.body = body;
-
-  return ret;
-}
-
-// exports API
-var turbolinks = new Turbolinks();
-turbolinks.Turbolinks = Turbolinks;
-module.exports = turbolinks;
-
-if (isSupported) {
-  delegate.bind(document, 'a', 'click', function(e) {
-    // TODO: ignore click
-    turbolinks.visit(e.delegateTarget.href);
-    return e.preventDefault();
+// initialize for event
+if (document.addEventListener && document.createEvent) {
+  document.addEventListener('DOMContentLoaded', function() {
+    exports.emit('page:change');
+    exports.emit('page:update');
   }, true);
 }
+
+// initialize for click
+if (isSupported) {
+  // remember current url
+  history.replaceState({turbolinks: true, url: location.href}, '', location.href);
+  // remember current state
+  currentState = history.state;
+  delegate.bind(document, 'a', 'click', handleClick, true);
+}
+
+function handleClick(e) {
+  if (!e.defaultPrevented) {
+    var node = e.delegateTarget;
+
+    // ignore cross origin link
+    var crossOriginLink = location.protocol !== node.protocol || location.host !== node.host;
+
+    // ignore anchors
+    var anchoredLink = (node.hash && removeHash(node)) === removeHash(location) || node.href === location.href + '#';
+
+    var url = removeHash(node);
+    var nonHtmlLink = url.match(/\.[a-z]+(\?.*)?$/g) && !url.match(/\.(?:htm|html)?(\?.*)?$/g);
+
+    var targetLink = node.target.length !== 0;
+
+    var nonStandardClick = e.which > 1 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
+
+    var ignoreClick = crossOriginLink || anchoredLink || nonHtmlLink || targetLink || nonStandardClick;
+
+    if (!ignoreClick) {
+      visit(node.href);
+      return e.preventDefault();
+    }
+  }
+}
+
+exports.isSupported = isSupported;
+exports.visit = visit;
