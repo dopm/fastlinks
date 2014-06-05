@@ -16,7 +16,7 @@ var buggyBrowsers = navigator.userAgent.match(/CriOS\//);
 // TODO: cookie
 var isSupported = hasHistoryState && !buggyBrowsers;
 
-var currentState, referrer;
+var currentState, referrer, cacheStorage = {};
 
 function visit(url) {
   if (!isSupported) return location.href = url;
@@ -31,7 +31,7 @@ function visit(url) {
     history.pushState({turbolinks: true, url: url}, '', url);
   }
 
-  var cachedPage = sessionStorage[url];
+  var cachedPage = cacheStorage[url];
   if (cachedPage) {
     fetchHistory(cachedPage);
     return fetch(url);
@@ -106,11 +106,9 @@ function fetchHistory(page) {
  * Render data to document.
  */
 function render(doc, runscript) {
-  var node = doc.querySelector('title');
-  var title = node ? node.textContent : null;
   // update title
-  if (title) {
-    document.title = data.title;
+  if (doc.title && doc.title.valueOf()) {
+    document.title = doc.title;
   }
 
   var body = doc.body;
@@ -167,8 +165,9 @@ function request(url, cb) {
  * Cache current page
  */
 function cacheCurrentPage() {
-  sessionStorage[currentState.url] = {
+  cacheStorage[currentState.url] = {
     url: document.location.href,
+    head: document.head,
     body: document.body,
     title: document.title,
     positionY: window.pageYOffset,
@@ -186,7 +185,7 @@ function removeHash(url) {
     link = document.createElement('A');
     link.href = url;
   }
-  return url.href.replace(url.hash, '');
+  return link.href.replace(link.hash, '');
 }
 
 
@@ -238,6 +237,21 @@ if (isSupported) {
   // remember current state
   currentState = history.state;
   delegate.bind(document, 'a', 'click', handleClick, true);
+
+  // state change
+  setTimeout(function() {
+    window.addEventListener('popstate', function(e) {
+      if (e.state && e.state.turbolinks) {
+        var cachedPage = cacheStorage[e.state.url];
+        if (cachedPage) {
+          cacheCurrentPage();
+          fetchHistory(cachedPage);
+        } else {
+          visit(e.target.location.href);
+        }
+      }
+    }, false);
+  }, 500);
 }
 
 function handleClick(e) {
