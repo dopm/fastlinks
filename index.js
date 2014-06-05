@@ -24,16 +24,20 @@ function visit(url) {
   // remember referer
   referrer = location.href;
 
-  // TODO: cache current page
+  cacheCurrentPage();
 
   // reflect new url
   if (url !== referrer) {
     history.pushState({turbolinks: true, url: url}, '', url);
   }
 
-  // TODO: transition cache
+  var cachedPage = sessionStorage[url];
+  if (cachedPage) {
+    fetchHistory(cachedPage);
+    return fetch(url);
+  }
 
-  fetch(url, function() {
+  return fetch(url, function() {
     if (location.hash) {
       return location.href = location.href;
     } else {
@@ -83,6 +87,19 @@ function fetch(url, cb) {
   fetch.xhr.onloadend = function() {
     fetch.xhr = null;
   };
+}
+
+/**
+ * Fetch from history.
+ */
+function fetchHistory(page) {
+  if (request.xhr) {
+    request.xhr.abort();
+  }
+  render(page);
+  // restore position
+  window.scrollTo(page.positionX, page.positionY);
+  exports.emit('page:restore');
 }
 
 /**
@@ -146,6 +163,19 @@ function request(url, cb) {
   return xhr;
 }
 
+/**
+ * Cache current page
+ */
+function cacheCurrentPage() {
+  sessionStorage[currentState.url] = {
+    url: document.location.href,
+    body: document.body,
+    title: document.title,
+    positionY: window.pageYOffset,
+    positionX: window.pageXOffset,
+    cachedAt: new Date().getTime()
+  };
+}
 
 /**
  * Remove hash on a URL.
