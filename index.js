@@ -234,7 +234,11 @@ function updateHead(head) {
       if (!meta.name) return;
       var selector = 'meta[name="' + meta.name + '"]';
       var original = document.head.querySelector(selector);
-      if (original) original.content = meta.content;
+      if (original) {
+        original.content = meta.content;
+      } else {
+        document.head.appendChild(meta);
+      }
     })(nodes[i]);
   }
 }
