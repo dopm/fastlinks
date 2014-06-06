@@ -16,7 +16,7 @@ var buggyBrowsers = navigator.userAgent.match(/CriOS\//);
 // TODO: cookie
 var isSupported = hasHistoryState && !buggyBrowsers;
 
-var currentState, referrer, cacheStorage = {};
+var currentState, referrer, cacheStorage = {}, cacheSize = 10;
 
 function visit(url) {
   if (!isSupported) return location.href = url;
@@ -24,7 +24,10 @@ function visit(url) {
   // remember referer
   referrer = location.href;
 
-  cacheCurrentPage();
+  // set cacheSize = 0 to disable cache
+  if (cacheSize) {
+    cacheCurrentPage();
+  }
 
   // reflect new url
   if (url !== referrer) {
@@ -33,8 +36,7 @@ function visit(url) {
 
   var cachedPage = cacheStorage[url];
   if (cachedPage) {
-    fetchHistory(cachedPage);
-    return fetch(url);
+    return fetchHistory(cachedPage);
   }
 
   return fetch(url, function() {
@@ -174,6 +176,21 @@ function cacheCurrentPage() {
     positionX: window.pageXOffset,
     cachedAt: new Date().getTime()
   };
+
+  // limitation on cache size
+  var cacheKeys = Object.keys(cacheStorage);
+  var limitAt = cacheKeys.map(function(url) {
+    return cacheStorage[url].cachedAt;
+  }).sort(function(a, b) {
+    return b - a;
+  })[cacheSize];
+
+  cacheKeys.forEach(function(url) {
+    if (cacheStorage[url].cachedAt < limitAt) {
+      exports.emit('page:expire', cacheStorage[url]);
+      delete cacheStorage[url];
+    }
+  });
 }
 
 /**
@@ -223,7 +240,7 @@ function updateHead(head) {
 }
 
 // initialize for event
-if (document.addEventListener && document.createEvent) {
+if (document.addEventListener) {
   document.addEventListener('DOMContentLoaded', function() {
     exports.emit('page:change');
     exports.emit('page:update');
@@ -280,5 +297,6 @@ function handleClick(e) {
   }
 }
 
+exports.cacheSize = cacheSize;
 exports.isSupported = isSupported;
 exports.visit = visit;
