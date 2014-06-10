@@ -231,8 +231,14 @@ function updateHead(head) {
   var nodes = head.querySelectorAll('meta');
   for (var i = 0; i < nodes.length; i++) {
     (function(meta) {
-      if (!meta.name) return;
-      var selector = 'meta[name="' + meta.name + '"]';
+      var property = meta.getAttribute('property');
+      if (!meta.name && !property) return;
+      var selector;
+      if (meta.name) {
+        selector = 'meta[name="' + meta.name + '"]';
+      } else {
+        selector = 'meta[property="' + property + '"]';
+      }
       var original = document.head.querySelector(selector);
       if (original) {
         original.content = meta.content;
