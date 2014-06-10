@@ -7,7 +7,6 @@
   "dependencies": {
     "component/emitter": "*",
     "component/delegate": "*",
-    "component/url": "*",
     "yuehu/dom-parser": "*",
     "yuehu/execute-script": "*"
   },
