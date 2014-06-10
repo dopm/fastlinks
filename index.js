@@ -20,6 +20,7 @@ var currentState, referrer, cacheStorage = {}, cacheSize = 10;
 
 function visit(url) {
   if (!isSupported) return location.href = url;
+  exports.emit('page:visit', {url: url});
 
   // remember referer
   referrer = location.href;
