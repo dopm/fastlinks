@@ -4,7 +4,7 @@
 
 var delegate = require('delegate');
 var domparse = require('doparser');
-var execute = require('execute-script');
+var execute = require('execscript');
 var Emitter = require('emitter');
 
 exports = module.exports = new Emitter();
