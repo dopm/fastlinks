@@ -1,9 +1,9 @@
-/**
- * Turbolinks in component.
+/*!
+ * Fastlinks in component.
  */
 
 var delegate = require('delegate');
-var domparse = require('dom-parser');
+var domparse = require('doparser');
 var execute = require('execute-script');
 var Emitter = require('emitter');
 
@@ -32,7 +32,7 @@ function visit(url) {
 
   // reflect new url
   if (url !== referrer) {
-    history.pushState({turbolinks: true, url: url}, '', url);
+    history.pushState({fastlinks: true, url: url}, '', url);
   }
 
   var cachedPage = cacheStorage[url];
@@ -222,7 +222,7 @@ function validStatus(code) {
 }
 
 function executeScripts(doc) {
-  var scripts = doc.querySelectorAll('script:not([data-turbolinks-eval="false"])');
+  var scripts = doc.querySelectorAll('script:not([data-fastlinks-eval="false"])');
   for (var i = 0; i < scripts.length; i++) {
     execute(scripts[i]);
   }
@@ -261,7 +261,7 @@ if (document.addEventListener) {
 // initialize for click
 if (isSupported) {
   // remember current url
-  history.replaceState({turbolinks: true, url: location.href}, '', location.href);
+  history.replaceState({fastlinks: true, url: location.href}, '', location.href);
   // remember current state
   currentState = history.state;
   delegate.bind(document, 'a', 'click', handleClick, true);
@@ -269,7 +269,7 @@ if (isSupported) {
   // state change
   setTimeout(function() {
     window.addEventListener('popstate', function(e) {
-      if (e.state && e.state.turbolinks) {
+      if (e.state && e.state.fastlinks) {
         var cachedPage = cacheStorage[e.state.url];
         if (cachedPage) {
           cacheCurrentPage();

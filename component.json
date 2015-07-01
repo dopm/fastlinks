@@ -1,14 +1,14 @@
 {
-  "name": "turbolinks",
-  "repo": "yuehu/turbolinks",
-  "description": "turbolinks in component.",
+  "name": "fastlinks",
+  "repo": "dopm/fastlinks",
+  "description": "fastlinks in component.",
   "version": "0.0.1",
   "keywords": [],
   "dependencies": {
     "component/emitter": "*",
     "component/delegate": "*",
-    "yuehu/dom-parser": "*",
-    "yuehu/execute-script": "*"
+    "dopm/doparser": "*",
+    "dopm/execute-script": "*"
   },
   "development": {},
   "license": "MIT",
